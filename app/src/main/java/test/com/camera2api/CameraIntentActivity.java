@@ -1,9 +1,15 @@
 package test.com.camera2api;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.SurfaceTexture;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
@@ -12,16 +18,22 @@ import android.support.v4.util.LruCache;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.GridLayoutManager;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
+import android.util.Size;
+import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
 
 
 public class CameraIntentActivity extends AppCompatActivity {
@@ -35,8 +47,31 @@ public class CameraIntentActivity extends AppCompatActivity {
     private File mGalleryFolder;
     private static LruCache<String, Bitmap> mMemoryCache;
     private RecyclerView mRecyclerView;
+    private TextureView mTextureView;
+    private Size mPreviewSize;
+    private String mCameraId;
+    private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            setupCamera(width, height);
+        }
 
-    @Override
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+            return false;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+
+        }
+    };
+
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_camera_intent);
@@ -50,8 +85,11 @@ public class CameraIntentActivity extends AppCompatActivity {
         createImageGallery();
 
         Button photoButton = (Button) findViewById(R.id.photoButton);
+
         mRecyclerView = (RecyclerView)findViewById(R.id.galleryRecyclerView);
-        RecyclerView.LayoutManager layoutManager = new GridLayoutManager(this, 1, GridLayoutManager.HORIZONTAL, false);
+        //RecyclerView.LayoutManager layoutManager = new GridLayoutManager(this, 1, GridLayoutManager.HORIZONTAL, false);
+        GridLayoutManager layoutManager = new GridLayoutManager(this, 1);
+        layoutManager.setOrientation(LinearLayoutManager.HORIZONTAL);
         mRecyclerView.setLayoutManager(layoutManager);
         RecyclerView.Adapter imageAdapter = new ImageAdapter(sortFilesToLatest(mGalleryFolder));
         mRecyclerView.setAdapter(imageAdapter);
@@ -67,6 +105,8 @@ public class CameraIntentActivity extends AppCompatActivity {
                 return value.getByteCount() / 1024;
             }
         };
+
+        mTextureView = (TextureView)findViewById(R.id.textureView);
 
         photoButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -89,6 +129,21 @@ public class CameraIntentActivity extends AppCompatActivity {
                 startActivityForResult(callCameraApplicationIntent, ACTIVITY_START_CAMERA_APP);
             }
         });
+    }
+
+    @Override
+    public void onResume()
+    {
+        super.onResume();
+
+        if (mTextureView.isAvailable())
+        {
+
+        }
+        else
+        {
+            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
+        }
     }
 
     protected void onActivityResult (int requestCode, int resultCode, Intent data)
@@ -150,6 +205,60 @@ public class CameraIntentActivity extends AppCompatActivity {
         {
             mMemoryCache.put(key, bitmap);
         }
+    }
+    private void setupCamera(int width, int height)
+    {
+        CameraManager cameraManager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
+        try
+        {
+            for (String cameraId : cameraManager.getCameraIdList())
+            {
+                CameraCharacteristics cameraCharacteristics = cameraManager.getCameraCharacteristics(cameraId);
+                if (cameraCharacteristics.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT)
+                {
+                    continue;
+                }
+                StreamConfigurationMap map = cameraCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                mPreviewSize = getPrefferedPreviewSize(map.getOutputSizes(SurfaceTexture.class), width, height);
+                mCameraId = cameraId;
+                return;
+            }
+        }
+        catch (CameraAccessException e)
+        {
+            e.printStackTrace();
+        }
+    }
+    private Size getPrefferedPreviewSize(Size[] mapSizes, int width, int height)
+    {
+        List<Size> collectrSize = new ArrayList<>();
+        for (Size option : mapSizes)
+        {
+            if (width > height)
+            {
+                if (option.getWidth() > width && option.getHeight() > height)
+                {
+                    collectrSize.add(option);
+                }
+            }
+            else
+            {
+                if (option.getWidth() > height && option.getHeight() > width)
+                {
+                    collectrSize.add(option);
+                }
+            }
+        }
+        if (collectrSize.size() > 0)
+        {
+            return Collections.min(collectrSize, new Comparator<Size>() {
+                @Override
+                public int compare(Size o1, Size o2) {
+                    return Long.signum(o1.getWidth() * o1.getHeight() - o2.getWidth() * o2.getHeight());
+                }
+            });
+        }
+        return mapSizes[0];
     }
 
     /////////////////////////////////////////
