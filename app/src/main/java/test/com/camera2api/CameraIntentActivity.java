@@ -8,11 +8,14 @@ import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.support.annotation.IntDef;
+import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.util.LruCache;
 import android.support.v7.app.AppCompatActivity;
@@ -54,6 +57,7 @@ public class CameraIntentActivity extends AppCompatActivity {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
             setupCamera(width, height);
+            openCamera();
         }
 
         @Override
@@ -69,6 +73,26 @@ public class CameraIntentActivity extends AppCompatActivity {
         @Override
         public void onSurfaceTextureUpdated(SurfaceTexture surface) {
 
+        }
+    };
+    private CameraDevice mCameraDevice;
+    private CameraDevice.StateCallback mCameraDeviceCallback = new CameraDevice.StateCallback() {
+        @Override
+        public void onOpened(@NonNull CameraDevice camera) {
+            mCameraDevice = camera;
+            Toast.makeText(getApplicationContext(), "Camera Opened", Toast.LENGTH_SHORT).show();
+        }
+
+        @Override
+        public void onDisconnected(@NonNull CameraDevice camera) {
+            camera.close();
+            mCameraDevice = null;
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice camera, int error) {
+            camera.close();
+            mCameraDevice = null;
         }
     };
 
@@ -259,6 +283,18 @@ public class CameraIntentActivity extends AppCompatActivity {
             });
         }
         return mapSizes[0];
+    }
+    private void openCamera()
+    {
+        CameraManager cameraManager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
+        try
+        {
+            cameraManager.openCamera(mCameraId, mCameraDeviceCallback, null);
+        }
+        catch (CameraAccessException e)
+        {
+            e.printStackTrace();
+        }
     }
 
     /////////////////////////////////////////
