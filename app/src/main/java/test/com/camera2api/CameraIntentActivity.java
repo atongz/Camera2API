@@ -7,9 +7,11 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Environment;
@@ -24,6 +26,7 @@ import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Size;
+import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
@@ -80,7 +83,8 @@ public class CameraIntentActivity extends AppCompatActivity {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
             mCameraDevice = camera;
-            Toast.makeText(getApplicationContext(), "Camera Opened", Toast.LENGTH_SHORT).show();
+            //Toast.makeText(getApplicationContext(), "Camera Opened", Toast.LENGTH_SHORT).show();
+            createCameraSession();
         }
 
         @Override
@@ -93,6 +97,15 @@ public class CameraIntentActivity extends AppCompatActivity {
         public void onError(@NonNull CameraDevice camera, int error) {
             camera.close();
             mCameraDevice = null;
+        }
+    };
+    private CaptureRequest mPreviewCaptureRequest;
+    private CaptureRequest.Builder mPreviewCaptureRequestBuilder;
+    private CameraCaptureSession mCameraCaptureSession;
+    private CameraCaptureSession.CaptureCallback mCaptureSessionCallback = new CameraCaptureSession.CaptureCallback() {
+        @Override
+        public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
+            super.onCaptureStarted(session, request, timestamp, frameNumber);
         }
     };
 
@@ -290,6 +303,45 @@ public class CameraIntentActivity extends AppCompatActivity {
         try
         {
             cameraManager.openCamera(mCameraId, mCameraDeviceCallback, null);
+        }
+        catch (CameraAccessException e)
+        {
+            e.printStackTrace();
+        }
+    }
+    private void createCameraSession()
+    {
+        try
+        {
+            SurfaceTexture surfaceTexture = mTextureView.getSurfaceTexture();
+            surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            Surface previewSurface = new Surface(surfaceTexture);
+            mPreviewCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            mPreviewCaptureRequestBuilder.addTarget(previewSurface);
+            mCameraDevice.createCaptureSession(Arrays.asList(previewSurface), new CameraCaptureSession.StateCallback() {
+                @Override
+                public void onConfigured(@NonNull CameraCaptureSession session) {
+                    if (mCameraDevice == null)
+                    {
+                        return;
+                    }
+                    try
+                    {
+                        mPreviewCaptureRequest = mPreviewCaptureRequestBuilder.build();
+                        mCameraCaptureSession = session;
+                        mCameraCaptureSession.setRepeatingRequest(mPreviewCaptureRequest, mCaptureSessionCallback, null);
+                    }
+                    catch (CameraAccessException e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+                    Toast.makeText(getApplicationContext(), "Create camera session failed", Toast.LENGTH_SHORT).show();
+                }
+            }, null);
         }
         catch (CameraAccessException e)
         {

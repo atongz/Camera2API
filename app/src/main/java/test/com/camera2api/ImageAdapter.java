@@ -113,6 +113,8 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
     }
     public static BitmapWorkerTask getBitmapWorkerTask (ImageView imageView)
     {
+        if (imageView == null)
+            return null;
         Drawable drawable = imageView.getDrawable();
         if (drawable instanceof AsyncDrawble)
         {
