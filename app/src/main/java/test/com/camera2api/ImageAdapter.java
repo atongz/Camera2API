@@ -2,22 +2,15 @@ package test.com.camera2api;
 
 import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Matrix;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.media.ExifInterface;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.Toast;
-
-//import com.squareup.picasso.Picasso;
-
 import java.io.File;
-import java.io.IOException;
 import java.lang.ref.WeakReference;
 
 /**
@@ -32,7 +25,6 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
 
     public ImageAdapter(File[] folderFiles)
     {
-        //imagesFile = folderFIle;
         imageFiles = folderFiles;
     }
 
@@ -44,15 +36,8 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
 
     @Override
     public void onBindViewHolder(final ViewHolder holder, int position) {
-        //File imageFile = imagesFile.listFiles()[position];
         File imageFile = imageFiles[position];
         final String name = imageFile.getName();
-        //Bitmap imageBitmap = BitmapFactory.decodeFile(imageFile.getAbsolutePath());
-        //rotateImage(imageFile,setReducedImageSize (holder, imageFile), holder);
-        //holder.getImageView().setImageBitmap(imageBitmap);
-        //Picasso.with(holder.getImageView().getContext()).load(imageFile).resize(400,600).into(holder.getImageView());
-        //BitmapWorkerTask workerTask = new BitmapWorkerTask(holder.getImageView());
-        //workerTask.execute(imageFile);
         Bitmap bitmap = CameraIntentActivity.getBitmapFromMemoryCache(imageFile.getName());
         if (bitmap != null)
         {
@@ -77,7 +62,6 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
 
     @Override
     public int getItemCount() {
-        //return imagesFile.listFiles().length;
         return imageFiles.length;
     }
 
@@ -122,8 +106,6 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
             }
             else
             {
-                //bitmap worker task file is the same as the imageview is expecting
-                //so do nothing.
                 return false;
             }
         }
