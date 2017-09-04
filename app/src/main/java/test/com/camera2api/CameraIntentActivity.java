@@ -11,7 +11,10 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.CaptureFailure;
 import android.hardware.camera2.CaptureRequest;
+import android.hardware.camera2.CaptureResult;
+import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Environment;
@@ -51,6 +54,9 @@ public class CameraIntentActivity extends AppCompatActivity {
     private static final int REQUEST_ID_WRITE_PERMISSION = 200;
 
     private final static int ACTIVITY_START_CAMERA_APP = 0;
+    private static final int STATE_PREVIEW = 0;
+    private static final int STATE_WAIT_LOCK = 1;
+    private int mState;
     private String mImageFileLocation = "";
     private String GALLERY_LOCATION = "image gallery";
     private File mGalleryFolder;
@@ -106,9 +112,37 @@ public class CameraIntentActivity extends AppCompatActivity {
     private CaptureRequest.Builder mPreviewCaptureRequestBuilder;
     private CameraCaptureSession mCameraCaptureSession;
     private CameraCaptureSession.CaptureCallback mCaptureSessionCallback = new CameraCaptureSession.CaptureCallback() {
+        private void process(CaptureResult result)
+        {
+            switch (mState)
+            {
+                case STATE_PREVIEW:
+                    //Do nothing
+                    break;
+                case STATE_WAIT_LOCK:
+                    Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
+                    if (afState == CaptureRequest.CONTROL_AF_STATE_FOCUSED_LOCKED)
+                    {
+                        unlockFocus();
+                        Toast.makeText(getApplicationContext(), "Focus Lock Successful", Toast.LENGTH_SHORT).show();
+                    }
+                    break;
+            }
+        }
         @Override
         public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
+        }
+        @Override
+        public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
+            super.onCaptureCompleted(session, request, result);
+            process(result);
+        }
+
+        @Override
+        public void onCaptureFailed(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull CaptureFailure failure) {
+            super.onCaptureFailed(session, request, failure);
+            Toast.makeText(getApplicationContext(), "Focus Lock Unseccessful", Toast.LENGTH_SHORT).show();
         }
     };
     private HandlerThread mBackgroundThread;
@@ -153,6 +187,7 @@ public class CameraIntentActivity extends AppCompatActivity {
         photoButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                /*
                 //Toast.makeText(getApplicationContext(), "Button Pressed", Toast.LENGTH_SHORT).show();
                 Intent callCameraApplicationIntent = new Intent();
 
@@ -169,6 +204,8 @@ public class CameraIntentActivity extends AppCompatActivity {
                 callCameraApplicationIntent.setAction(MediaStore.ACTION_IMAGE_CAPTURE);
                 callCameraApplicationIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFIle));
                 startActivityForResult(callCameraApplicationIntent, ACTIVITY_START_CAMERA_APP);
+                */
+                lockFocus();
             }
         });
     }
@@ -195,6 +232,11 @@ public class CameraIntentActivity extends AppCompatActivity {
         closeCamera();
         closeBackgroundThread();
         super.onPause();
+    }
+
+    public void takePhoto()
+    {
+
     }
 
     protected void onActivityResult (int requestCode, int resultCode, Intent data)
@@ -391,6 +433,32 @@ public class CameraIntentActivity extends AppCompatActivity {
             mBackgroundThread = null;
             mBackgroundHandler = null;
         }catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+    }
+    private void lockFocus()
+    {
+        try
+        {
+            mState = STATE_WAIT_LOCK;
+            mPreviewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_START);
+            mCameraCaptureSession.capture(mPreviewCaptureRequestBuilder.build(), mCaptureSessionCallback, mBackgroundHandler);
+        }
+        catch (CameraAccessException e)
+        {
+            e.printStackTrace();
+        }
+    }
+    private void unlockFocus()
+    {
+        try
+        {
+            mState = STATE_PREVIEW;
+            mPreviewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
+            mCameraCaptureSession.capture(mPreviewCaptureRequestBuilder.build(), mCaptureSessionCallback, mBackgroundHandler);
+        }
+        catch (CameraAccessException e)
         {
             e.printStackTrace();
         }
