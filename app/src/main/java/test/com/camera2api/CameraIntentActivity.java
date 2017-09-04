@@ -15,6 +15,8 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Environment;
+import android.os.HandlerThread;
+import android.os.Handler;
 import android.provider.MediaStore;
 import android.support.annotation.IntDef;
 import android.support.annotation.NonNull;
@@ -40,6 +42,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.logging.LogRecord;
 
 
 public class CameraIntentActivity extends AppCompatActivity {
@@ -108,6 +111,8 @@ public class CameraIntentActivity extends AppCompatActivity {
             super.onCaptureStarted(session, request, timestamp, frameNumber);
         }
     };
+    private HandlerThread mBackgroundThread;
+    private Handler mBackgroundHandler;
 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -173,14 +178,23 @@ public class CameraIntentActivity extends AppCompatActivity {
     {
         super.onResume();
 
+        openBackgroundThread();
         if (mTextureView.isAvailable())
         {
-
+            setupCamera(mTextureView.getWidth(), mTextureView.getHeight());
+            openCamera();
         }
         else
         {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
+    }
+    @Override
+    public void onPause()
+    {
+        closeCamera();
+        closeBackgroundThread();
+        super.onPause();
     }
 
     protected void onActivityResult (int requestCode, int resultCode, Intent data)
@@ -302,11 +316,24 @@ public class CameraIntentActivity extends AppCompatActivity {
         CameraManager cameraManager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
         try
         {
-            cameraManager.openCamera(mCameraId, mCameraDeviceCallback, null);
+            cameraManager.openCamera(mCameraId, mCameraDeviceCallback, mBackgroundHandler);
         }
         catch (CameraAccessException e)
         {
             e.printStackTrace();
+        }
+    }
+    private void closeCamera()
+    {
+        if (mCameraCaptureSession != null)
+        {
+            mCameraCaptureSession.close();
+            mCameraCaptureSession = null;
+        }
+        if (mCameraDevice != null)
+        {
+            mCameraDevice.close();
+            mCameraDevice = null;
         }
     }
     private void createCameraSession()
@@ -329,7 +356,7 @@ public class CameraIntentActivity extends AppCompatActivity {
                     {
                         mPreviewCaptureRequest = mPreviewCaptureRequestBuilder.build();
                         mCameraCaptureSession = session;
-                        mCameraCaptureSession.setRepeatingRequest(mPreviewCaptureRequest, mCaptureSessionCallback, null);
+                        mCameraCaptureSession.setRepeatingRequest(mPreviewCaptureRequest, mCaptureSessionCallback, mBackgroundHandler);
                     }
                     catch (CameraAccessException e)
                     {
@@ -344,6 +371,26 @@ public class CameraIntentActivity extends AppCompatActivity {
             }, null);
         }
         catch (CameraAccessException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void openBackgroundThread()
+    {
+        mBackgroundThread = new HandlerThread("Camera2 background");
+        mBackgroundThread.start();
+        mBackgroundHandler = new Handler(mBackgroundThread.getLooper());
+    }
+    private void closeBackgroundThread()
+    {
+        mBackgroundThread.quitSafely();
+        try
+        {
+            mBackgroundThread.join();
+            mBackgroundThread = null;
+            mBackgroundHandler = null;
+        }catch (InterruptedException e)
         {
             e.printStackTrace();
         }
