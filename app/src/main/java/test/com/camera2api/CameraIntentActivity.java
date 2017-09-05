@@ -1,6 +1,7 @@
 package test.com.camera2api;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -23,8 +24,11 @@ import android.net.Uri;
 import android.os.Environment;
 import android.os.HandlerThread;
 import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
 import android.provider.MediaStore;
 import android.support.annotation.IntDef;
+import android.support.annotation.MainThread;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.util.LruCache;
@@ -69,6 +73,7 @@ public class CameraIntentActivity extends AppCompatActivity {
     private final static int ACTIVITY_START_CAMERA_APP = 0;
     private static final int STATE_PREVIEW = 0;
     private static final int STATE_WAIT_LOCK = 1;
+    private final static int STATE_PICTURE_CAPTURED = 2;
     private int mState;
     private String mImageFileLocation = "";
     private String GALLERY_LOCATION = "image gallery";
@@ -138,6 +143,7 @@ public class CameraIntentActivity extends AppCompatActivity {
                     {
                         //unlockFocus();
                         //Toast.makeText(getApplicationContext(), "Focus Lock Successful", Toast.LENGTH_SHORT).show();
+                        mState = STATE_PICTURE_CAPTURED;
                         captureStillImage();
                     }
                     break;
@@ -161,21 +167,34 @@ public class CameraIntentActivity extends AppCompatActivity {
     };
     private HandlerThread mBackgroundThread;
     private Handler mBackgroundHandler;
+    private final Handler mUiHandler = new Handler(Looper.getMainLooper()) {
+        @Override
+        public void handleMessage(Message msg) {
+            super.handleMessage(msg);
+            swapImageAdapter();
+        }
+    };
     private static File mImageFile = null;
     private ImageReader mImageReader;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageSaver(reader.acquireNextImage()));
+            mBackgroundHandler.post(new ImageSaver(mActivity, reader.acquireNextImage(), mUiHandler));
         }
     };
+    private static Uri mRequestingAppUri;
+    private Activity mActivity;
 
     private static class ImageSaver implements Runnable
     {
+        private final Activity mActivity;
         private final Image mImage;
-        private ImageSaver (Image image)
+        private final Handler mHandler;
+        private ImageSaver (Activity activity, Image image, Handler handler)
         {
+            mActivity = activity;
             mImage = image;
+            mHandler = handler;
         }
         @Override
         public void run() {
@@ -200,6 +219,8 @@ public class CameraIntentActivity extends AppCompatActivity {
                         e.printStackTrace();
                     }
                 }
+                Message message = mHandler.obtainMessage();
+                message.sendToTarget();
             }
         }
     }
@@ -261,14 +282,6 @@ public class CameraIntentActivity extends AppCompatActivity {
                 callCameraApplicationIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(photoFIle));
                 startActivityForResult(callCameraApplicationIntent, ACTIVITY_START_CAMERA_APP);
                 */
-                try
-                {
-                    mImageFile = createImageFile();
-                }
-                catch (IOException e)
-                {
-                    e.printStackTrace();
-                }
                 lockFocus();
             }
         });
@@ -346,7 +359,7 @@ public class CameraIntentActivity extends AppCompatActivity {
         Arrays.sort(files, new Comparator<File>() {
             @Override
             public int compare(File o1, File o2) {
-                return Long.valueOf((o2.lastModified())).compareTo(o1.lastModified());
+                return Long.valueOf(o2.lastModified()).compareTo(o1.lastModified());
             }
         });
         return files;
@@ -537,16 +550,21 @@ public class CameraIntentActivity extends AppCompatActivity {
         {
             mState = STATE_PREVIEW;
             mPreviewCaptureRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_CANCEL);
-            mCameraCaptureSession.capture(mPreviewCaptureRequestBuilder.build(), mCaptureSessionCallback, mBackgroundHandler);
+            mCameraCaptureSession.setRepeatingRequest(mPreviewCaptureRequestBuilder.build(), mCaptureSessionCallback, mBackgroundHandler);
         }
         catch (CameraAccessException e)
         {
             e.printStackTrace();
         }
     }
-
+    private void swapImageAdapter()
+    {
+        RecyclerView.Adapter newImageAdadpter = new ImageAdapter(sortFilesToLatest(mGalleryFolder));
+        mRecyclerView.swapAdapter(newImageAdadpter, false);
+    }
     private void captureStillImage()
     {
+        //Handler uiHandler = new Handler(getMainLooper());
         try
         {
             CaptureRequest.Builder captureStillBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
@@ -555,15 +573,33 @@ public class CameraIntentActivity extends AppCompatActivity {
 
             int rotation = getWindowManager().getDefaultDisplay().getRotation();
             captureStillBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+
             CameraCaptureSession.CaptureCallback captureCallback = new CameraCaptureSession.CaptureCallback() {
+                @Override
+                public void onCaptureStarted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, long timestamp, long frameNumber) {
+                    super.onCaptureStarted(session, request, timestamp, frameNumber);
+
+                    try
+                    {
+                        mImageFile = createImageFile();
+                    }
+                    catch (IOException e)
+                    {
+                        e.printStackTrace();
+                    }
+                }
+
                 @Override
                 public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
                     super.onCaptureCompleted(session, request, result);
 
-                    Toast.makeText(getApplicationContext(), "Image Captured", Toast.LENGTH_SHORT).show();
+                    //swapImageAdapter();
+
+                    //Toast.makeText(getApplicationContext(), "Image Captured", Toast.LENGTH_SHORT).show();
                     unlockFocus();
                 }
             };
+            mCameraCaptureSession.stopRepeating();
             mCameraCaptureSession.capture(captureStillBuilder.build(), captureCallback, null);
         } catch (CameraAccessException e)
         {
