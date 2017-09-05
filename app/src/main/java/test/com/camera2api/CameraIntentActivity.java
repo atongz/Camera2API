@@ -320,10 +320,6 @@ public class CameraIntentActivity extends AppCompatActivity implements RecyclerV
         super.onPause();
     }
 
-    public void takePhoto()
-    {
-
-    }
 
     protected void onActivityResult (int requestCode, int resultCode, Intent data)
     {
