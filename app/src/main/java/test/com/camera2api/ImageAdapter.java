@@ -6,6 +6,7 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -22,10 +23,12 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
     private Bitmap placeHolderBitmap;
     private File imagesFile;
     private File[] imageFiles;
+    private static RecyclerViewClickPositionInterface mPositionInterface;
 
-    public ImageAdapter(File[] folderFiles)
+    public ImageAdapter(File[] folderFiles, RecyclerViewClickPositionInterface positionInterface)
     {
         imageFiles = folderFiles;
+        mPositionInterface = positionInterface;
     }
 
     @Override
@@ -51,13 +54,15 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
             bitmapWorkerTask.execute(imageFile);
         }
 
+        /*
         // Add onclicklistener on each imageView
         holder.getImageView().setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Toast.makeText(v.getContext(), name, Toast.LENGTH_SHORT).show();
+                //Toast.makeText(v.getContext(), name, Toast.LENGTH_SHORT).show();
             }
         });
+        */
     }
 
     @Override
@@ -65,19 +70,25 @@ public class ImageAdapter extends RecyclerView.Adapter<ImageAdapter.ViewHolder> 
         return imageFiles.length;
     }
 
-    public static class ViewHolder extends RecyclerView.ViewHolder{
+    public static class ViewHolder extends RecyclerView.ViewHolder implements View.OnClickListener{
         private ImageView imageview;
 
         public ViewHolder (View view)
         {
             super(view);
 
+            view.setOnClickListener(this);
             imageview = (ImageView)view.findViewById(R.id.imageGalleryView);
         }
 
         public ImageView getImageView()
         {
             return imageview;
+        }
+
+        @Override
+        public void onClick(View v) {
+            mPositionInterface.getRecyclerViewAdapterPosition(this.getPosition());
         }
     }
 

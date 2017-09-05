@@ -58,7 +58,7 @@ import java.util.List;
 import java.util.logging.LogRecord;
 
 
-public class CameraIntentActivity extends AppCompatActivity {
+public class CameraIntentActivity extends AppCompatActivity implements RecyclerViewClickPositionInterface {
 
     private static final int REQUEST_ID_READ_PERMISSION = 100;
     private static final int REQUEST_ID_WRITE_PERMISSION = 200;
@@ -185,6 +185,11 @@ public class CameraIntentActivity extends AppCompatActivity {
     private static Uri mRequestingAppUri;
     private Activity mActivity;
 
+    @Override
+    public void getRecyclerViewAdapterPosition(int position) {
+        Toast.makeText(getApplicationContext(), Integer.toString(position), Toast.LENGTH_SHORT).show();
+    }
+
     private static class ImageSaver implements Runnable
     {
         private final Activity mActivity;
@@ -244,7 +249,7 @@ public class CameraIntentActivity extends AppCompatActivity {
         GridLayoutManager layoutManager = new GridLayoutManager(this, 1);
         layoutManager.setOrientation(LinearLayoutManager.HORIZONTAL);
         mRecyclerView.setLayoutManager(layoutManager);
-        RecyclerView.Adapter imageAdapter = new ImageAdapter(sortFilesToLatest(mGalleryFolder));
+        RecyclerView.Adapter imageAdapter = new ImageAdapter(sortFilesToLatest(mGalleryFolder), this);
         mRecyclerView.setAdapter(imageAdapter);
 
         final int maxMemorySize = (int) Runtime.getRuntime().maxMemory() / 1024;
@@ -320,7 +325,7 @@ public class CameraIntentActivity extends AppCompatActivity {
     {
         if (requestCode == ACTIVITY_START_CAMERA_APP && resultCode == RESULT_OK)
         {
-            RecyclerView.Adapter newImageAdadpter = new ImageAdapter(sortFilesToLatest(mGalleryFolder));
+            RecyclerView.Adapter newImageAdadpter = new ImageAdapter(sortFilesToLatest(mGalleryFolder), this);
             mRecyclerView.swapAdapter(newImageAdadpter, false);
         }
         else
@@ -559,7 +564,7 @@ public class CameraIntentActivity extends AppCompatActivity {
     }
     private void swapImageAdapter()
     {
-        RecyclerView.Adapter newImageAdadpter = new ImageAdapter(sortFilesToLatest(mGalleryFolder));
+        RecyclerView.Adapter newImageAdadpter = new ImageAdapter(sortFilesToLatest(mGalleryFolder), this);
         mRecyclerView.swapAdapter(newImageAdadpter, false);
     }
     private void captureStillImage()
