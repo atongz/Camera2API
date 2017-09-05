@@ -34,6 +34,7 @@ import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.util.Size;
+import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -58,6 +59,13 @@ public class CameraIntentActivity extends AppCompatActivity {
     private static final int REQUEST_ID_READ_PERMISSION = 100;
     private static final int REQUEST_ID_WRITE_PERMISSION = 200;
 
+    private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
+    static {
+        ORIENTATIONS.append(Surface.ROTATION_0, 90);
+        ORIENTATIONS.append(Surface.ROTATION_90, 0);
+        ORIENTATIONS.append(Surface.ROTATION_180, 270);
+        ORIENTATIONS.append(Surface.ROTATION_270, 180);
+    }
     private final static int ACTIVITY_START_CAMERA_APP = 0;
     private static final int STATE_PREVIEW = 0;
     private static final int STATE_WAIT_LOCK = 1;
@@ -98,7 +106,7 @@ public class CameraIntentActivity extends AppCompatActivity {
         public void onOpened(@NonNull CameraDevice camera) {
             mCameraDevice = camera;
             //Toast.makeText(getApplicationContext(), "Camera Opened", Toast.LENGTH_SHORT).show();
-            createCameraSession();
+            createCameraPreviewSession();
         }
 
         @Override
@@ -128,8 +136,9 @@ public class CameraIntentActivity extends AppCompatActivity {
                     Integer afState = result.get(CaptureResult.CONTROL_AF_STATE);
                     if (afState == CaptureRequest.CONTROL_AF_STATE_FOCUSED_LOCKED)
                     {
-                        unlockFocus();
-                        Toast.makeText(getApplicationContext(), "Focus Lock Successful", Toast.LENGTH_SHORT).show();
+                        //unlockFocus();
+                        //Toast.makeText(getApplicationContext(), "Focus Lock Successful", Toast.LENGTH_SHORT).show();
+                        captureStillImage();
                     }
                     break;
             }
@@ -372,7 +381,7 @@ public class CameraIntentActivity extends AppCompatActivity {
                         new Comparator<Size>() {
                             @Override
                             public int compare(Size o1, Size o2) {
-                                return Long.signum(o1.getWidth() * o2.getHeight() - o1.getHeight() * o2.getWidth());
+                                return Long.signum(o1.getWidth() * o1.getHeight() - o2.getWidth() * o2.getHeight());
                             }
                         });
                 mImageReader = ImageReader.newInstance(largestImageSize.getWidth(), largestImageSize.getHeight(), ImageFormat.JPEG, 1);
@@ -443,8 +452,13 @@ public class CameraIntentActivity extends AppCompatActivity {
             mCameraDevice.close();
             mCameraDevice = null;
         }
+        if (mImageReader != null)
+        {
+            mImageReader.close();
+            mImageReader = null;
+        }
     }
-    private void createCameraSession()
+    private void createCameraPreviewSession()
     {
         try
         {
@@ -453,7 +467,8 @@ public class CameraIntentActivity extends AppCompatActivity {
             Surface previewSurface = new Surface(surfaceTexture);
             mPreviewCaptureRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
             mPreviewCaptureRequestBuilder.addTarget(previewSurface);
-            mCameraDevice.createCaptureSession(Arrays.asList(previewSurface), new CameraCaptureSession.StateCallback() {
+            //mCameraDevice.createCaptureSession(Arrays.asList(previewSurface), new CameraCaptureSession.StateCallback() {
+            mCameraDevice.createCaptureSession(Arrays.asList(previewSurface, mImageReader.getSurface()), new CameraCaptureSession.StateCallback() {
                 @Override
                 public void onConfigured(@NonNull CameraCaptureSession session) {
                     if (mCameraDevice == null)
@@ -525,6 +540,32 @@ public class CameraIntentActivity extends AppCompatActivity {
             mCameraCaptureSession.capture(mPreviewCaptureRequestBuilder.build(), mCaptureSessionCallback, mBackgroundHandler);
         }
         catch (CameraAccessException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    private void captureStillImage()
+    {
+        try
+        {
+            CaptureRequest.Builder captureStillBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE);
+            //captureStillBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_MANUAL);
+            captureStillBuilder.addTarget(mImageReader.getSurface());
+
+            int rotation = getWindowManager().getDefaultDisplay().getRotation();
+            captureStillBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+            CameraCaptureSession.CaptureCallback captureCallback = new CameraCaptureSession.CaptureCallback() {
+                @Override
+                public void onCaptureCompleted(@NonNull CameraCaptureSession session, @NonNull CaptureRequest request, @NonNull TotalCaptureResult result) {
+                    super.onCaptureCompleted(session, request, result);
+
+                    Toast.makeText(getApplicationContext(), "Image Captured", Toast.LENGTH_SHORT).show();
+                    unlockFocus();
+                }
+            };
+            mCameraCaptureSession.capture(captureStillBuilder.build(), captureCallback, null);
+        } catch (CameraAccessException e)
         {
             e.printStackTrace();
         }
